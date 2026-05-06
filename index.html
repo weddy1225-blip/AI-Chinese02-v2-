@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🛡️ 異常觀測修復中心 - 多元變幻版</title>
+  <style>
+    :root { --bg: #0f0f13; --text: #d1d1d1; --accent: #4ade80; --error: #fb7185; --card: #1e1e26; }
+    body { font-family: "Microsoft JhengHei", sans-serif; background: var(--bg); color: var(--text); display: flex; justify-content: center; padding: 20px; margin: 0; }
+    .card { background: var(--card); padding: 25px; border-radius: 16px; width: 100%; max-width: 900px; border: 1px solid #333; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+    h1 { color: #fff; text-align: center; letter-spacing: 2px; border-bottom: 2px solid var(--accent); padding-bottom: 10px; margin-top: 0; }
+    
+    .landmark-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px; margin: 20px 0; }
+    .loc-btn { background: #2d2d3a; border: 1px solid #444; color: #ccc; padding: 12px 5px; border-radius: 8px; cursor: pointer; transition: 0.2s; font-size: 14px; }
+    .loc-btn.selected { background: var(--accent); color: #000; font-weight: bold; border-color: #fff; transform: translateY(-3px); box-shadow: 0 4px 10px rgba(74, 222, 128, 0.3); }
+    
+    .game-box { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px; }
+    .drop-zone { background: rgba(0,0,0,0.2); border: 2px dashed #555; border-radius: 12px; min-height: 480px; padding: 12px; }
+    #anomaly-zone { border-color: var(--error); background: rgba(251, 113, 133, 0.05); }
+    
+    .drag-item { background: #2d2d3a; border-radius: 6px; padding: 14px; margin-bottom: 10px; cursor: grab; font-size: 14px; border: 1px solid #444; color: #eee; line-height: 1.6; transition: background 0.2s; }
+    .drag-item:hover { background: #36364a; }
+    .dragging { opacity: 0.3; }
+
+    button.main-btn { width: 100%; padding: 16px; background: #3b82f6; color: #fff; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 16px; margin-top: 15px; transition: 0.3s; }
+    button.main-btn:disabled { background: #444; cursor: not-allowed; opacity: 0.5; }
+    .btn-red { background: var(--error); }
+    
+    .hidden { display: none; }
+    .result-text { font-size: 17px; text-align: center; padding: 20px; line-height: 1.6; }
+    .ans-box { background: #111; padding: 15px; border-radius: 10px; margin-top: 15px; border: 1px solid #444; }
+    .ans-item { font-size: 13px; margin-bottom: 8px; border-left: 4px solid #444; padding-left: 10px; }
+
+    .rules-panel { background: #000; padding: 15px; border-left: 4px solid var(--accent); border-radius: 4px; margin-bottom: 20px; }
+    
+    @media (max-width: 600px) { .game-box { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+
+<div class="card">
+  <h1>🛡️ 異常觀測修復中心</h1>
+
+  <div id="step-1">
+    <p>📡 偵測到校園空間擾動，請選取 <strong>3 個</strong> 重點觀測座標：</p>
+    <div id="landmark-container" class="landmark-grid"></div>
+    <div style="text-align: right; color: #888;">選取進度：<span id="count" style="color:var(--accent)">0</span> / 3</div>
+    <button id="start-btn" class="main-btn" onclick="startGame()" disabled>連線觀測網</button>
+  </div>
+
+  <div id="step-2" class="hidden">
+    <div class="rules-panel">
+      <strong style="color:var(--accent)">📜 觀測員指導手冊：</strong><br>
+      請仔細閱讀感測報告。若敘述中出現「違背物理定律」、「感官描述矛盾」或「非人類社交行為」，請立即拖入右側隔離區。
+    </div>
+    <div class="game-box">
+      <div><div style="text-align:center; color:#888; font-size:14px; margin-bottom:8px;">📡 穩定訊號</div><div id="safe-zone" class="drop-zone"></div></div>
+      <div><div style="text-align:center; color:var(--error); font-size:14px; margin-bottom:8px;">⚠️ 異常隔離區</div><div id="anomaly-zone" class="drop-zone"></div></div>
+    </div>
+    <button class="main-btn btn-red" onclick="submitReport()">提交報告</button>
+  </div>
+
+  <div id="step-3" class="hidden">
+    <div id="result-status" style="font-size: 28px; text-align: center; font-weight: bold; margin-bottom: 10px;"></div>
+    <div id="result-detail" class="result-text"></div>
+    <div id="ans-display" class="ans-box">
+      <strong style="color: var(--accent);">🔍 報告分析詳細清單：</strong><hr style="border-color:#333; margin: 10px 0;">
+      <div id="correct-list"></div>
+    </div>
+    <button class="main-btn" onclick="location.reload()">重新校準頻率</button>
+  </div>
+</div>
+
+<script>
+  // 擴展題庫：每個地點具備隨機抽題機制
+  const masterDatabase = {
+    "保健室": {
+      safe: [
+        "護理師正在清理藥櫃，並仔細核對感冒藥與外傷軟膏的有效期限。",
+        "身高機發出輕微的機械聲，同學正脫下鞋子站上去測量數值。",
+        "午休時間，幾位不舒服的同學正在隔簾後的病床上靜靜休息。"
+      ],
+      anomaly: [
+        "視力檢查表上的「E」字符號開始自行旋轉，並發出像磨牙般的尖銳摩擦聲。",
+        "躺在病床上的同學蓋著棉被，但棉被下方卻呈現凹陷，彷彿裡面空無一人。",
+        "體溫計顯示出攝氏零下十度，但被測量的學生卻面帶微笑說自己感覺很溫暖。"
+      ]
+    },
+    "電腦教室": {
+      safe: [
+        "學生們正專心操作滑鼠，螢幕上閃爍著程式語言的色彩塊，教室裡只有點擊聲。",
+        "老師正在廣播系統中示範如何將檔案存到雲端硬碟，提醒大家下課前要登出。",
+        "冷氣孔正吹出涼風，主機後方的風扇轉動聲讓整間教室維持著穩定的頻率。"
+      ],
+      anomaly: [
+        "教室最後排的電腦主機明明沒有接上電源線，螢幕卻顯示著某種不知名的古老文字。",
+        "當你點擊滑鼠左鍵時，手指感覺到螢幕裡有一股力量正從內部向外推擠你的指尖。",
+        "雖然耳機裡沒有播放音樂，但學生們卻整齊劃一地隨著某種不存在的節奏在搖晃身體。"
+      ]
+    },
+    "飲水機": {
+      safe: [
+        "濾水器的燈號顯示為綠色的「合格」，水流穩定地注入不鏽鋼水壺中。",
+        "地上的防滑墊有些歪掉，打掃時間的學生拿著拖把將噴濺出來的水漬擦乾。",
+        "剛運動完的同學大口喝著涼水，並和身旁的人討論等一下的體育課測驗。"
+      ],
+      anomaly: [
+        "按住「冰水」按鈕後，流出來的卻是像乾冰一樣的白色煙霧，並迅速沒入地板消失。",
+        "飲水機上方的玻璃面板倒映出走廊的景象，但鏡像中的同學們卻全部都是靜止不動的。",
+        "牆壁縫隙滲出了透明液體，並沿著牆面逆流而上，匯聚成一個懸浮在空中的水球。"
+      ]
+    },
+    "男廁所": {
+      safe: [
+        "最後一間廁所的門鎖壞了，上面掛著一張寫有「報修中」的字卡。",
+        "洗手台的感應水龍頭稍微有些不靈敏，需要把手伸近一點才能出水。",
+        "空氣中散發著淡淡的清潔劑味道，清潔人員剛把拖乾淨的地板圍上護欄。"
+      ],
+      anomaly: [
+        "洗手台的鏡子裡，你的倒影正用一種你完全沒有做出的驚恐表情盯著你看。",
+        "當你打開水龍頭時，流出來的不是水，而是無數顆不斷跳動、像魚卵般的細小透明晶體。",
+        "所有的廁所門都在同一瞬間整齊地反鎖，並從門縫滲出一種充滿泥土味的黑色霧氣。"
+      ]
+    },
+    "操場": {
+      safe: [
+        "跑道上的藍色塗層在陽光下微微發亮，學生們正練習著大隊接力的傳接棒動作。",
+        "足球飛過半場，守門員奮力撲救，草地上留下了一串被踩過的雜亂腳印。",
+        "司令台後方的升旗台拉繩隨風擺動，發出輕微的扣環撞擊金屬聲。"
+      ],
+      anomaly: [
+        "百米起跑線上的學生雖然在原地奮力奔跑，但他腳下的跑道卻像輸送帶一樣向後延伸。",
+        "天空盤旋的一群麻雀突然在空中靜止，就像被釘在藍色布幕上的標本一樣不再扇動翅膀。",
+        "足球場中央出現了一個直徑兩公尺的圓圈，進入圈內的球會瞬間縮小並消失不見。"
+      ]
+    },
+    "圖書館": {
+      safe: [
+        "書架上排列著各種類別的圖書，圖書館員正用推車將還書歸類回原處。",
+        "窗邊的閱覽區坐滿了看報紙的老師和查閱資料的同學，氣氛安靜祥和。",
+        "自動借書機發出嗶嗶聲，螢幕提示學生將學生證放置在感應區進行驗證。"
+      ],
+      anomaly: [
+        "某一本紅色書皮的百科全書正緩慢地自行翻頁，書頁間發出像人類呼吸般的起伏聲。",
+        "當你穿過兩座書架之間時，發現書架對面並不是牆壁，而是一片看不見盡頭的枯萎森林。",
+        "圖書館內的時鐘秒針正快速地逆時針旋轉，但窗外的陽光卻沒有發生任何光影變化。"
+      ]
+    },
+    "樓梯間": [
+      {
+        safe: [
+          "階梯邊緣的防滑條有些磨損，學生們靠右行走，手扶著鋁製欄杆向上爬。",
+          "轉角處貼著「小心階梯」的警示語，還有一盆作為綠化用的萬年青植物。",
+          "走廊盡頭的應急照明燈發出微弱的紅光，指示著避難逃生的方向。"
+        ],
+        anomaly: [
+          "明明才剛走完一層樓的階梯，轉過身卻發現原本的樓層標示從「三樓」變成了「九樓」。",
+          "扶手欄杆觸摸起來不像是冷冰冰的金屬，而像是有著體溫且佈滿細微脈搏的生物組織。",
+          "你在轉彎處看見自己的背影正走下樓梯，但他穿著的制服卻是去年早已更換的舊款式。"
+        ]
+      }
+    ],
+    "校長室": {
+      safe: [
+        "門口掛著歷屆校長的相片，門縫裡傳來茶水沸騰的聲音與訪客的低聲交談。",
+        "書桌上整齊擺放著各項公文，校長正戴著眼鏡認真簽署下週活動的計畫書。",
+        "沙發區的桌面上放著一套精緻的茶具，牆上掛著校訓「誠正勤樸」的書法作品。"
+      ],
+      anomaly: [
+        "牆上歷屆校長的相片，其視線始終鎖定著你在房間內移動的位置，甚至會微微點頭。",
+        "辦公桌下的陰影中伸出一雙穿著學生布鞋的腳，但辦公桌上方並沒有任何人坐在那裡。",
+        "室內的溫度明明很正常，但角落那盆萬年青的葉片上卻結出了一層厚厚的透明冰霜。"
+      ]
+    }
+  };
+
+  let selectedLocs = [];
+  let correctAnswers = [];
+
+  function init() {
+    const keys = Object.keys(masterDatabase);
+    const shuffled = keys.sort(() => Math.random() - 0.5).slice(0, 7);
+    const container = document.getElementById('landmark-container');
+    shuffled.forEach(name => {
+      const btn = document.createElement('button');
+      btn.className = 'loc-btn';
+      btn.innerText = name;
+      btn.onclick = () => {
+        if (selectedLocs.includes(name)) {
+          selectedLocs = selectedLocs.filter(i => i !== name);
+          btn.classList.remove('selected');
+        } else if (selectedLocs.length < 3) {
+          selectedLocs.push(name);
+          btn.classList.add('selected');
+        }
+        document.getElementById('count').innerText = selectedLocs.length;
+        document.getElementById('start-btn').disabled = (selectedLocs.length !== 3);
+      };
+      container.appendChild(btn);
+    });
+  }
+
+  function startGame() {
+    document.getElementById('step-1').classList.add('hidden');
+    document.getElementById('step-2').classList.remove('hidden');
+
+    let allPool = [];
+    selectedLocs.forEach(loc => {
+      const data = masterDatabase[loc];
+      // 邏輯修正：如果是陣列（如樓梯間），取第一個；否則直接取 safe/anomaly
+      const source = Array.isArray(data) ? data[0] : data;
+      
+      // 從 safe 中隨機抽 1 個
+      const safeItem = source.safe[Math.floor(Math.random() * source.safe.length)];
+      // 從 anomaly 中隨機抽 1 個
+      const anomalyItem = source.anomaly[Math.floor(Math.random() * source.anomaly.length)];
+      
+      allPool.push({t: safeItem, e: false});
+      allPool.push({t: anomalyItem, e: true});
+    });
+
+    const displayItems = allPool.sort(() => Math.random() - 0.5);
+    const safeZone = document.getElementById('safe-zone');
+    
+    displayItems.forEach(obj => {
+      if (obj.e) correctAnswers.push(obj.t);
+      const el = document.createElement('div');
+      el.className = 'drag-item';
+      el.draggable = true;
+      el.innerText = obj.t;
+      el.ondragstart = () => el.classList.add('dragging');
+      el.ondragend = () => el.classList.remove('dragging');
+      safeZone.appendChild(el);
+    });
+
+    document.querySelectorAll('.drop-zone').forEach(zone => {
+      zone.ondragover = e => e.preventDefault();
+      zone.ondrop = () => {
+        const d = document.querySelector('.dragging');
+        if (d) zone.appendChild(d);
+      };
+    });
+  }
+
+  function submitReport() {
+    const playerChoices = [...document.getElementById('anomaly-zone').querySelectorAll('.drag-item')].map(i => i.innerText);
+    const missing = correctAnswers.filter(x => !playerChoices.includes(x));
+    const wrong = playerChoices.filter(x => !correctAnswers.includes(x));
+
+    document.getElementById('step-2').classList.add('hidden');
+    document.getElementById('step-3').classList.remove('hidden');
+
+    const statusEl = document.getElementById('result-status');
+    const detailEl = document.getElementById('result-detail');
+    const listEl = document.getElementById('correct-list');
+    listEl.innerHTML = ""; 
+
+    correctAnswers.forEach(ans => {
+      const div = document.createElement('div');
+      div.className = 'ans-item';
+      if (playerChoices.includes(ans)) {
+        div.style.color = "var(--accent)";
+        div.style.borderLeftColor = "var(--accent)";
+        div.innerText = "✅ 成功攔截異常：" + ans;
+      } else {
+        div.style.color = "var(--error)";
+        div.style.borderLeftColor = "var(--error)";
+        div.innerText = "❌ 未攔截異常：" + ans;
+      }
+      listEl.appendChild(div);
+    });
+
+    if (missing.length === 0 && wrong.length === 0) {
+      statusEl.innerText = "✅ 觀測成功";
+      statusEl.style.color = "var(--accent)";
+      detailEl.innerText = "你的感官極其敏銳，所有的空間扭曲與邏輯錯誤都已被中和。";
+    } else {
+      statusEl.innerText = "⚠️ 任務失敗";
+      statusEl.style.color = "var(--error)";
+      detailEl.innerText = `警戒！遺漏了 ${missing.length} 處異常，並誤報了 ${wrong.length} 處穩定訊號。`;
+    }
+  }
+
+  window.onload = init;
+</script>
+</body>
+</html>
